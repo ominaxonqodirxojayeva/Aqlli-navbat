@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply font-sans bg-navy-950 text-navy-100;
+  }
+  ::selection {
+    @apply bg-electric-500/30 text-white;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  .glass-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-2xl;
+  }
+  .glass-light {
+    @apply bg-white/10 backdrop-blur-md border border-white/10;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-electric-400 via-accent-400 to-electric-500 bg-clip-text text-transparent;
+  }
+  .btn-primary {
+    @apply px-6 py-3 rounded-xl bg-gradient-to-r from-electric-500 to-electric-600 text-white font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-electric-500/30 hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .btn-secondary {
+    @apply px-6 py-3 rounded-xl glass text-white font-semibold transition-all duration-300 hover:bg-white/10 hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .btn-ghost {
+    @apply px-4 py-2 rounded-lg text-navy-200 hover:text-white hover:bg-white/5 transition-all duration-200 font-medium;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl bg-navy-900/50 border border-white/10 text-white placeholder-navy-400 focus:outline-none focus:border-electric-500/50 focus:ring-2 focus:ring-electric-500/20 transition-all duration-200;
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-electric-500/10;
+  }
+  .status-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/20;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
