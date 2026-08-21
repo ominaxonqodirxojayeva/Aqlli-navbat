@@ -14,24 +14,19 @@ import {
   RefreshCw,
   Hospital,
   Banknote,
-  Building2,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, Badge, EmptyState, Spinner, StatCard } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
-import { supabase, type NavbatQueueWithDetails, type NavbatQueueWithService, type NavbatService, type QueueStatus, type Organization } from '@/lib/supabase';
+import { supabase, type NavbatQueueWithDetails, type QueueStatus, type Organization } from '@/lib/supabase';
 import { STATUS_LABELS, STATUS_COLORS, STATUS_DOT_COLORS, formatMinutes, timeAgo } from '@/lib/utils';
 
 export function AdminDashboard() {
-  const { profile } = useAuth();
   const [queues, setQueues] = useState<NavbatQueueWithDetails[]>([]);
-  const [services, setServices] = useState<NavbatService[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<QueueStatus | 'all'>('all');
-  const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [orgFilter, setOrgFilter] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -48,22 +43,19 @@ export function AdminDashboard() {
   const loadData = async () => {
     setError(null);
     try {
-      const [queuesRes, servicesRes, orgsRes] = await Promise.all([
+      const [queuesRes, orgsRes] = await Promise.all([
         supabase
           .from('navbat_queues')
           .select('*, service:navbat_services(*), organization:organizations(*), profile:profiles(*)')
           .order('created_at', { ascending: false })
           .limit(100),
-        supabase.from('navbat_services').select('*').order('name'),
         supabase.from('organizations').select('*').order('name'),
       ]);
 
       if (queuesRes.error) throw queuesRes.error;
-      if (servicesRes.error) throw servicesRes.error;
       if (orgsRes.error) throw orgsRes.error;
 
       setQueues(queuesRes.data as unknown as NavbatQueueWithDetails[]);
-      setServices(servicesRes.data ?? []);
       setOrganizations((orgsRes.data ?? []) as Organization[]);
 
       const today = new Date();
@@ -111,40 +103,14 @@ export function AdminDashboard() {
     setActionLoading('next');
     setActionError(null);
     try {
-      const serving = filteredQueues.find((q) => q.status === 'serving');
-      if (serving) {
-        await supabase
-          .from('navbat_queues')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
-          .eq('id', serving.id);
-      }
-
-      const waiting = filteredQueues
-        .filter((q) => q.status === 'waiting')
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-
-      if (waiting.length === 0) {
-        setActionError('Navbatda mijoz qolmagan.');
+      if (orgFilter === 'all') {
+        setActionError('Avval tashkilotni tanlang.');
         return;
       }
 
-      await supabase
-        .from('navbat_queues')
-        .update({ status: 'serving', called_at: new Date().toISOString() })
-        .eq('id', waiting[0].id);
-
-      const num = parseInt(waiting[0].queue_number.split('-')[1] ?? '0', 10);
-      if (waiting[0].organization_id) {
-        await supabase
-          .from('navbat_queue_settings')
-          .update({ current_number: num, updated_at: new Date().toISOString() })
-          .eq('organization_id', waiting[0].organization_id);
-      } else if (waiting[0].service_id) {
-        await supabase
-          .from('navbat_queue_settings')
-          .update({ current_number: num, updated_at: new Date().toISOString() })
-          .eq('service_id', waiting[0].service_id);
-      }
+      const { data, error } = await supabase.rpc('admin_next_org_queue', { p_org_id: orgFilter });
+      if (error) throw error;
+      if (!data?.length) setActionError('Navbatda mijoz qolmagan.');
 
       await loadData();
     } catch {
@@ -171,7 +137,8 @@ export function AdminDashboard() {
         updates.status = 'cancelled';
       }
 
-      await supabase.from('navbat_queues').update(updates).eq('id', queueId);
+      const { error } = await supabase.from('navbat_queues').update(updates).eq('id', queueId);
+      if (error) throw error;
       await loadData();
     } catch {
       setActionError('Amal bajarishda xatolik yuz berdi.');
@@ -182,7 +149,6 @@ export function AdminDashboard() {
 
   const filteredQueues = queues.filter((q) => {
     if (statusFilter !== 'all' && q.status !== statusFilter) return false;
-    if (serviceFilter !== 'all' && q.service_id !== serviceFilter) return false;
     if (orgFilter !== 'all' && q.organization_id !== orgFilter) return false;
     if (search) {
       const s = search.toLowerCase();

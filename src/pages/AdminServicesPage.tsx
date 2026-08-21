@@ -11,11 +11,9 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, Badge, EmptyState, Spinner } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
 import { supabase, type NavbatService } from '@/lib/supabase';
 
 export function AdminServicesPage() {
-  const { profile } = useAuth();
   const [services, setServices] = useState<NavbatService[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

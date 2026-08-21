@@ -27,6 +27,10 @@ export function RegisterPage() {
       setError('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
       return;
     }
+    if (!/^\+998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}$/.test(phone.trim())) {
+      setError('Telefon raqamni to\'g\'ri kiriting: +998 XX XXX XX XX');
+      return;
+    }
 
     setLoading(true);
     const { error } = await signUp(email, password, fullName, phone);
@@ -34,7 +38,7 @@ export function RegisterPage() {
     if (error) {
       setError(error);
     } else {
-      navigate('/dashboard');
+      navigate('/get-queue');
     }
   };
 

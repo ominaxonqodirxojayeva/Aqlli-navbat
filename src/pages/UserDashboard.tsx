@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Clock,
   Users,
@@ -23,13 +23,11 @@ import { STATUS_LABELS, STATUS_COLORS, STATUS_DOT_COLORS, formatMinutes } from '
 
 export function UserDashboard() {
   const { profile } = useAuth();
-  const navigate = useNavigate();
   const [activeQueue, setActiveQueue] = useState<NavbatQueueWithService | null>(null);
   const [settings, setSettings] = useState<NavbatQueueSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
-  const [prevStatus, setPrevStatus] = useState<string | null>(null);
   const [peopleAhead, setPeopleAhead] = useState(0);
 
   const loadData = async () => {
@@ -41,6 +39,8 @@ export function UserDashboard() {
         .select('*, service:navbat_services(*), organization:organizations(*)')
         .eq('user_id', profile.id)
         .in('status', ['waiting', 'serving'])
+            .order('created_at', { ascending: true })
+            .limit(1)
         .maybeSingle();
 
       if (qErr) throw qErr;
@@ -65,7 +65,8 @@ export function UserDashboard() {
             .select('*', { count: 'exact', head: true })
             .eq('organization_id', q.organization_id)
             .eq('status', 'waiting')
-            .lt('created_at', q.created_at);
+            .lt('created_at', q.created_at)
+            .neq('id', q.id);
           setPeopleAhead(count ?? 0);
         }
       }
@@ -83,7 +84,7 @@ export function UserDashboard() {
   // Real-time subscription for active queue
   useEffect(() => {
     if (!activeQueue?.id) return;
-    setPrevStatus(activeQueue.status);
+    const previousStatus = activeQueue.status;
 
     const channel = supabase
       .channel(`queue-${activeQueue.id}`)
@@ -92,9 +93,9 @@ export function UserDashboard() {
         { event: 'UPDATE', schema: 'public', table: 'navbat_queues', filter: `id=eq.${activeQueue.id}` },
         (payload) => {
           const updated = payload.new as NavbatQueue;
-          if (updated.status === 'serving' && prevStatus === 'waiting') {
+          if (updated.status === 'serving' && previousStatus === 'waiting') {
             setNotification('Navbatingiz chaqirildi! Xizmat ko\'rsatish joyiga boring.');
-            if (Notification.permission === 'granted') {
+            if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('Aqlli Navbat', { body: 'Navbatingiz chaqirildi!' });
             }
           }

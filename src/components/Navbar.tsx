@@ -7,7 +7,6 @@ import {
   Menu,
   X,
   Bell,
-  Monitor,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase, type Notification } from '@/lib/supabase';

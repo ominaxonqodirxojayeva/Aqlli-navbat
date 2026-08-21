@@ -13,11 +13,9 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, Badge, EmptyState, Spinner } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
 import { supabase, type Organization } from '@/lib/supabase';
 
 export function AdminOrganizationsPage() {
-  const { profile } = useAuth();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

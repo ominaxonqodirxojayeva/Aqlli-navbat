@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? '').trim();
+const supabaseAnonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim();
 
 const isConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -32,6 +32,9 @@ export const supabase: SupabaseClient = createClient(
 );
 
 export const isSupabaseConfigured = isConfigured;
+export const supabaseConfigError = isConfigured
+  ? null
+  : 'Supabase sozlanmagan. Loyiha ildizida .env fayl yarating va VITE_SUPABASE_URL hamda VITE_SUPABASE_ANON_KEY qiymatlarini kiriting.';
 
 export async function testSupabaseConnection(): Promise<{
   success: boolean;

@@ -19,7 +19,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, Badge, EmptyState, Spinner } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { supabase, type NavbatQueueWithService, type NavbatQueueSettings, type QueueStatus, type Organization } from '@/lib/supabase';
+import { supabase, type NavbatQueueWithService, type NavbatQueueSettings, type QueueStatus } from '@/lib/supabase';
 import { STATUS_LABELS, STATUS_COLORS, STATUS_DOT_COLORS, formatMinutes } from '@/lib/utils';
 
 export function QueueDetailPage() {
@@ -32,7 +32,6 @@ export function QueueDetailPage() {
   const [notification, setNotification] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [prevStatus, setPrevStatus] = useState<QueueStatus | null>(null);
   const [peopleAhead, setPeopleAhead] = useState(0);
 
   const loadData = async () => {
@@ -44,6 +43,8 @@ export function QueueDetailPage() {
         .select('*, service:navbat_services(*), organization:organizations(*)')
         .eq('user_id', profile.id)
         .in('status', ['waiting', 'serving'])
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (qErr) throw qErr;
@@ -68,7 +69,8 @@ export function QueueDetailPage() {
             .select('*', { count: 'exact', head: true })
             .eq('organization_id', q.organization_id)
             .eq('status', 'waiting')
-            .lt('created_at', q.created_at);
+            .lt('created_at', q.created_at)
+            .neq('id', q.id);
           setPeopleAhead(count ?? 0);
         }
       }
@@ -86,7 +88,7 @@ export function QueueDetailPage() {
   // Real-time subscription
   useEffect(() => {
     if (!queue?.id) return;
-    setPrevStatus(queue.status);
+    const previousStatus = queue.status;
 
     const channel = supabase
       .channel(`detail-${queue.id}`)
@@ -95,14 +97,14 @@ export function QueueDetailPage() {
         { event: 'UPDATE', schema: 'public', table: 'navbat_queues', filter: `id=eq.${queue.id}` },
         (payload) => {
           const updated = payload.new as { status: QueueStatus };
-          if (updated.status === 'serving' && prevStatus === 'waiting') {
+          if (updated.status === 'serving' && previousStatus === 'waiting') {
             setNotification('Navbatingiz chaqirildi! Xizmat ko\'rsatish joyiga boring.');
-            if (Notification.permission === 'granted') {
+            if ('Notification' in window && Notification.permission === 'granted') {
               new Notification('Aqlli Navbat', { body: 'Navbatingiz chaqirildi!' });
             }
-          } else if (updated.status === 'completed' && prevStatus !== 'completed') {
+          } else if (updated.status === 'completed' && previousStatus !== 'completed') {
             setNotification('Xizmat yakunlandi.');
-          } else if (updated.status === 'skipped' && prevStatus !== 'skipped') {
+          } else if (updated.status === 'skipped' && previousStatus !== 'skipped') {
             setNotification('Navbatingiz o\'tkazib yuborildi.');
           }
           loadData();
@@ -178,11 +180,9 @@ export function QueueDetailPage() {
   const orgType = queue.organization?.type;
   const waitTime = queue.estimated_wait_time;
 
-  const qrData = JSON.stringify({
-    queueId: queue.id,
-    queueNumber: queue.queue_number,
-    org: orgName,
-  });
+  const qrData = queue.organization?.slug
+    ? `${window.location.origin}/join/${queue.organization.slug}`
+    : `${window.location.origin}/get-queue`;
 
   return (
     <DashboardLayout activePage="/my-queue" role="customer">

@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, EmptyState, Spinner, StatCard } from '@/components/ui';
-import { supabase, type NavbatQueueWithDetails, type NavbatService, type Organization } from '@/lib/supabase';
+import { supabase, type NavbatQueueWithDetails, type Organization } from '@/lib/supabase';
 import { STATUS_LABELS, formatMinutes } from '@/lib/utils';
 
 const PIE_COLORS: Record<string, string> = {
@@ -37,7 +37,6 @@ const PIE_COLORS: Record<string, string> = {
 
 export function AdminStatsPage() {
   const [queues, setQueues] = useState<NavbatQueueWithDetails[]>([]);
-  const [services, setServices] = useState<NavbatService[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,22 +45,19 @@ export function AdminStatsPage() {
     const loadData = async () => {
       setError(null);
       try {
-        const [queuesRes, servicesRes, orgsRes] = await Promise.all([
+        const [queuesRes, orgsRes] = await Promise.all([
           supabase
             .from('navbat_queues')
             .select('*, service:navbat_services(*), organization:organizations(*), profile:profiles(*)')
             .order('created_at', { ascending: false })
             .limit(500),
-          supabase.from('navbat_services').select('*').order('name'),
           supabase.from('organizations').select('*').order('name'),
         ]);
 
         if (queuesRes.error) throw queuesRes.error;
-        if (servicesRes.error) throw servicesRes.error;
         if (orgsRes.error) throw orgsRes.error;
 
         setQueues(queuesRes.data as unknown as NavbatQueueWithDetails[]);
-        setServices(servicesRes.data ?? []);
         setOrganizations((orgsRes.data ?? []) as Organization[]);
       } catch {
         setError('Ma\'lumotlarni yuklashda xatolik yuz berdi.');

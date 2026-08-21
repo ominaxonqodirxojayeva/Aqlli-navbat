@@ -12,7 +12,6 @@ import {
   TimerReset,
   CalendarDays,
   Monitor,
-  Zap,
   Ticket,
   BarChart3,
   Building2,

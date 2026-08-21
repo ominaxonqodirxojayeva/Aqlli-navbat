@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { supabase, type Profile, type UserRole } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, type Profile, type UserRole } from '@/lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextValue {
@@ -32,6 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      const savedProfile = window.localStorage.getItem('aqlli-navbat-demo-profile');
+      if (savedProfile) setProfile(JSON.parse(savedProfile) as Profile);
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (!data.session) setLoading(false);
@@ -78,6 +85,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      const savedProfile = window.localStorage.getItem('aqlli-navbat-demo-profile');
+      const savedCredentials = window.localStorage.getItem('aqlli-navbat-demo-credentials');
+      const credentials = savedCredentials ? JSON.parse(savedCredentials) as { email: string; password: string } : null;
+      if (credentials?.email === email && credentials.password === password && savedProfile) {
+        setProfile(JSON.parse(savedProfile) as Profile);
+        return { error: null };
+      }
+      return { error: 'Email yoki parol noto\'g\'ri.' };
+    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
@@ -88,6 +105,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fullName: string,
     phone: string
   ) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return { error: 'Email manzilini to\'g\'ri kiriting.' };
+    }
+    const normalizedPhone = phone.replace(/[\s\-()]/g, '');
+    if (!/^\+998\d{9}$/.test(normalizedPhone)) {
+      return { error: 'Telefon raqamni to\'g\'ri kiriting: +998 XX XXX XX XX.' };
+    }
+    if (!isSupabaseConfigured) {
+      const demoProfile: Profile = {
+        id: `demo-${Date.now()}`,
+        full_name: fullName.trim(),
+        phone: normalizedPhone,
+        email: email.trim().toLowerCase(),
+        role: 'customer',
+        created_at: new Date().toISOString(),
+      };
+      window.localStorage.setItem('aqlli-navbat-demo-profile', JSON.stringify(demoProfile));
+      window.localStorage.setItem('aqlli-navbat-demo-credentials', JSON.stringify({ email: demoProfile.email, password }));
+      setProfile(demoProfile);
+      return { error: null };
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -95,19 +133,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
     if (data.user) {
-      await supabase.from('profiles').upsert({
+      const { error: profileError } = await supabase.from('profiles').upsert({
         id: data.user.id,
         full_name: fullName,
         email,
-        phone: phone || null,
+        phone: normalizedPhone,
         role: 'customer',
       });
+      if (profileError) return { error: `Profilni saqlab bo'lmadi: ${profileError.message}` };
     }
     return { error: null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured) await supabase.auth.signOut();
+    window.localStorage.removeItem('aqlli-navbat-demo-profile');
+    window.localStorage.removeItem('aqlli-navbat-demo-credentials');
     setProfile(null);
     setSession(null);
   };

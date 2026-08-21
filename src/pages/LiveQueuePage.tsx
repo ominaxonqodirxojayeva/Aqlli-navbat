@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Clock, Monitor, ArrowLeft, Volume2, Hospital, Banknote, Building2 } from 'lucide-react';
+import { Clock, Monitor, ArrowLeft, Volume2, Hospital, Banknote } from 'lucide-react';
 import { Logo } from '@/components/Navbar';
 import { supabase, type NavbatQueue, type Organization } from '@/lib/supabase';
 
@@ -36,22 +36,16 @@ export function DisplayPage() {
   const loadData = async (orgId?: string) => {
     const targetOrgId = orgId ?? selectedOrg?.id;
     if (!targetOrgId) {
-      // Load all if no org selected
-      const [servingRes, waitingRes] = await Promise.all([
-        supabase.from('navbat_queues').select('*').eq('status', 'serving').order('called_at', { ascending: false }),
-        supabase.from('navbat_queues').select('*').eq('status', 'waiting').order('created_at', { ascending: true }).limit(10),
-      ]);
-      setServingQueues((servingRes.data ?? []) as NavbatQueue[]);
-      setWaitingQueues((waitingRes.data ?? []) as NavbatQueue[]);
+      setServingQueues([]);
+      setWaitingQueues([]);
       return;
     }
 
-    const [servingRes, waitingRes] = await Promise.all([
-      supabase.from('navbat_queues').select('*').eq('status', 'serving').eq('organization_id', targetOrgId).order('called_at', { ascending: false }),
-      supabase.from('navbat_queues').select('*').eq('status', 'waiting').eq('organization_id', targetOrgId).order('created_at', { ascending: true }).limit(10),
-    ]);
-    setServingQueues((servingRes.data ?? []) as NavbatQueue[]);
-    setWaitingQueues((waitingRes.data ?? []) as NavbatQueue[]);
+    const { data, error } = await supabase.rpc('get_public_org_display', { p_org_id: targetOrgId });
+    if (error) return;
+    const queues = (data ?? []) as NavbatQueue[];
+    setServingQueues(queues.filter((queue) => queue.status === 'serving'));
+    setWaitingQueues(queues.filter((queue) => queue.status === 'waiting').slice(0, 10));
   };
 
   useEffect(() => {
@@ -77,10 +71,6 @@ export function DisplayPage() {
   const handleSelectOrg = (org: Organization) => {
     setSelectedOrg(org);
     void loadData(org.id);
-  };
-
-  const getOrgName = (q: NavbatQueue) => {
-    return organizations.find((o) => o.id === q.organization_id)?.name ?? 'Noma\'lum';
   };
 
   return (

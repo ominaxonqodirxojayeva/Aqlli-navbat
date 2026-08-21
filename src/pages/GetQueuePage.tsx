@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   PlusCircle,
   ArrowLeft,
   ArrowRight,
   AlertCircle,
   Loader2,
-  CheckCircle2,
   Search,
   Building2,
   Banknote,
@@ -22,7 +21,14 @@ import {
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, EmptyState, Spinner, Badge } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { supabase, type Organization, type NavbatQueue } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase, type Organization, type NavbatQueue } from '@/lib/supabase';
+
+const demoOrganizations: Organization[] = [
+  { id: 'demo-clinic-12', name: '12-son Poliklinika', type: 'clinic', slug: 'clinic-12', prefix: 'P', is_active: true, description: null, logo_url: null, created_at: new Date().toISOString() },
+  { id: 'demo-clinic-1', name: '1-son Poliklinika', type: 'clinic', slug: 'clinic-1', prefix: 'P', is_active: true, description: null, logo_url: null, created_at: new Date().toISOString() },
+  { id: 'demo-bank-kapital', name: 'Kapitalbank', type: 'bank', slug: 'bank-kapital', prefix: 'B', is_active: true, description: null, logo_url: null, created_at: new Date().toISOString() },
+  { id: 'demo-bank-hamkor', name: 'Hamkorbank', type: 'bank', slug: 'bank-hamkor', prefix: 'B', is_active: true, description: null, logo_url: null, created_at: new Date().toISOString() },
+];
 
 type Step = 'type' | 'select' | 'details' | 'result';
 
@@ -37,7 +43,6 @@ interface QueueResult {
 
 export function GetQueuePage() {
   const { profile } = useAuth();
-  const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const [step, setStep] = useState<Step>('type');
   const [orgType, setOrgType] = useState<'clinic' | 'bank' | null>(null);
@@ -58,6 +63,15 @@ export function GetQueuePage() {
   useEffect(() => {
     const init = async () => {
       if (slug) {
+        if (!isSupabaseConfigured) {
+          const demoOrg = demoOrganizations.find((organization) => organization.slug === slug);
+          if (demoOrg) {
+            setSelectedOrg(demoOrg);
+            setOrgType(demoOrg.type as 'clinic' | 'bank');
+            setStep('details');
+          }
+          return;
+        }
         const { data } = await supabase
           .from('organizations')
           .select('*')
@@ -79,6 +93,11 @@ export function GetQueuePage() {
   // Load organizations
   useEffect(() => {
     const loadOrgs = async () => {
+      if (!isSupabaseConfigured) {
+        setOrganizations(demoOrganizations);
+        setLoading(false);
+        return;
+      }
       const { data } = await supabase
         .from('organizations')
         .select('*')
@@ -94,11 +113,17 @@ export function GetQueuePage() {
   useEffect(() => {
     const checkActive = async () => {
       if (!profile?.id) return;
+      if (!isSupabaseConfigured) {
+        setActiveQueue(null);
+        return;
+      }
       const { data } = await supabase
         .from('navbat_queues')
         .select('*')
         .eq('user_id', profile.id)
         .in('status', ['waiting', 'serving'])
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
       setActiveQueue(data as NavbatQueue | null);
     };
@@ -154,6 +179,21 @@ export function GetQueuePage() {
     setIssuing(true);
     setIssueError(null);
     try {
+      if (!isSupabaseConfigured) {
+        const nextNumber = Number(window.localStorage.getItem(`demo-queue-${selectedOrg.id}`) ?? '0') + 1;
+        window.localStorage.setItem(`demo-queue-${selectedOrg.id}`, String(nextNumber));
+        const demoResult: QueueResult = {
+          id: `demo-queue-${Date.now()}`,
+          queue_number: `${selectedOrg.prefix ?? (orgType === 'bank' ? 'B' : 'P')}-${String(nextNumber).padStart(3, '0')}`,
+          status: 'waiting',
+          estimated_wait_time: 0,
+          organization_name: selectedOrg.name,
+          organization_prefix: selectedOrg.prefix ?? (orgType === 'bank' ? 'B' : 'P'),
+        };
+        setResult(demoResult);
+        setStep('result');
+        return;
+      }
       const { data, error } = await supabase.rpc('create_org_queue', {
         p_org_id: selectedOrg.id,
         p_user_id: profile.id,
@@ -202,7 +242,7 @@ export function GetQueuePage() {
 
   // Real-time for result page
   useEffect(() => {
-    if (step !== 'result' || !result || !selectedOrg) return;
+    if (!isSupabaseConfigured || step !== 'result' || !result || !selectedOrg) return;
     const channel = supabase
       .channel(`result-${result.id}`)
       .on(
