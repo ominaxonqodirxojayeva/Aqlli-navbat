@@ -26,6 +26,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function profileFromUser(user: User): Profile {
+  return {
+    id: user.id,
+    full_name: String(user.user_metadata?.full_name ?? user.email ?? 'Foydalanuvchi'),
+    phone: user.user_metadata?.phone ?? user.phone ?? null,
+    email: user.email ?? null,
+    role: user.user_metadata?.role === 'admin' ? 'admin' : 'customer',
+    created_at: user.created_at,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -41,15 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (!data.session) setLoading(false);
+      setProfile(data.session?.user ? profileFromUser(data.session.user) : null);
+      setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
       if (!sess) {
-        setProfile(null);
         setLoading(false);
       }
+      setProfile(sess?.user ? profileFromUser(sess.user) : null);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -57,31 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session?.user) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      if (!cancelled) {
-        setProfile(data as Profile | null);
-        setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    setProfile(profileFromUser(session.user));
+    setLoading(false);
   }, [session]);
 
   const refreshProfile = async () => {
-    if (!session?.user) return;
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .maybeSingle();
-    setProfile(data as Profile | null);
+    if (session?.user) setProfile(profileFromUser(session.user));
   };
 
   const signIn = async (identifier: string, password: string) => {
