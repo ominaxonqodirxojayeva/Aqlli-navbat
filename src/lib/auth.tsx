@@ -95,8 +95,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { error: 'Email yoki parol noto\'g\'ri.' };
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (!error) return { error: null };
+    if (error.message.toLowerCase().includes('email not confirmed')) {
+      return { error: 'Email manzilingizni tasdiqlang, keyin qayta kiring.' };
+    }
+    if (error.message.toLowerCase().includes('invalid login credentials')) {
+      return { error: 'Email yoki parol noto\'g\'ri.' };
+    }
+    return { error: error.message };
   };
 
   const signUp = async (
@@ -126,21 +136,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(demoProfile);
       return { error: null };
     }
+    const normalizedEmail = email.trim().toLowerCase();
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
-      options: { data: { full_name: fullName, role: 'customer' as UserRole, phone } },
+      options: { data: { full_name: fullName.trim(), role: 'customer' as UserRole, phone: normalizedPhone } },
     });
-    if (error) return { error: error.message };
-    if (data.user) {
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: data.user.id,
-        full_name: fullName,
-        email,
-        phone: normalizedPhone,
-        role: 'customer',
-      });
-      if (profileError) return { error: `Profilni saqlab bo'lmadi: ${profileError.message}` };
+    if (error) {
+      if (error.code === 'weak_password') {
+        return { error: 'Bu parol zaif yoki avval sizib chiqqan. Harf, raqam va belgilardan iborat yangi parol tanlang.' };
+      }
+      return { error: error.message };
+    }
+    if (data.user && !data.session) {
+      return { error: 'Hisob yaratildi. Email manzilingizni tasdiqlang, keyin login qiling.' };
     }
     return { error: null };
   };

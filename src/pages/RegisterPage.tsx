@@ -23,8 +23,8 @@ export function RegisterPage() {
       setError('Parollar mos kelmadi');
       return;
     }
-    if (password.length < 6) {
-      setError('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
+    if (password.length < 8) {
+      setError('Parol kamida 8 ta belgidan iborat bo\'lishi kerak');
       return;
     }
     if (!/^\+998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}$/.test(phone.trim())) {
