@@ -28,7 +28,7 @@ function ProtectedRoute({
   children: JSX.Element;
   roles: ('customer' | 'admin')[];
 }) {
-  const { session, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!profile) return <Navigate to="/login" replace />;
   if (!roles.includes(profile.role)) {
@@ -38,7 +38,7 @@ function ProtectedRoute({
 }
 
 function PublicOnlyRoute({ children }: { children: JSX.Element }) {
-  const { session, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (profile) {
     return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
