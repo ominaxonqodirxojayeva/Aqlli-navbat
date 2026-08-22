@@ -118,6 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return { error: 'Email manzilini to\'g\'ri kiriting.' };
     }
+    if (password.length !== 6) {
+      return { error: 'Parol aynan 6 ta belgidan iborat bo\'lishi kerak.' };
+    }
     const normalizedPhone = phone.replace(/[\s\-()]/g, '');
     if (!/^\+998\d{9}$/.test(normalizedPhone)) {
       return { error: 'Telefon raqamni to\'g\'ri kiriting: +998 XX XXX XX XX.' };
