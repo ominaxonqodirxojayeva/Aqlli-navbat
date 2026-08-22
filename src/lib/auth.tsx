@@ -84,19 +84,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(data as Profile | null);
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (identifier: string, password: string) => {
     if (!isSupabaseConfigured) {
       const savedProfile = window.localStorage.getItem('aqlli-navbat-demo-profile');
       const savedCredentials = window.localStorage.getItem('aqlli-navbat-demo-credentials');
-      const credentials = savedCredentials ? JSON.parse(savedCredentials) as { email: string; password: string } : null;
-      if (credentials?.email === email && credentials.password === password && savedProfile) {
+      const credentials = savedCredentials
+        ? JSON.parse(savedCredentials) as { email: string; phone?: string; password: string }
+        : null;
+      const normalizedIdentifier = identifier.trim().toLowerCase();
+      const normalizedPhone = normalizedIdentifier.replace(/[\s\-()]/g, '');
+      if ((credentials?.email === normalizedIdentifier || credentials?.phone === normalizedPhone) && credentials.password === password && savedProfile) {
         setProfile(JSON.parse(savedProfile) as Profile);
         return { error: null };
       }
       return { error: 'Email yoki parol noto\'g\'ri.' };
     }
+    const normalizedIdentifier = identifier.trim();
+    const isPhone = /^\+998\d{9}$/.test(normalizedIdentifier.replace(/[\s\-()]/g, ''));
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      ...(isPhone
+        ? { phone: normalizedIdentifier.replace(/[\s\-()]/g, '') }
+        : { email: normalizedIdentifier.toLowerCase() }),
       password,
     });
     if (!error) return { error: null };
@@ -135,7 +143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         created_at: new Date().toISOString(),
       };
       window.localStorage.setItem('aqlli-navbat-demo-profile', JSON.stringify(demoProfile));
-      window.localStorage.setItem('aqlli-navbat-demo-credentials', JSON.stringify({ email: demoProfile.email, password }));
+      window.localStorage.setItem('aqlli-navbat-demo-credentials', JSON.stringify({
+        email: demoProfile.email,
+        phone: normalizedPhone,
+        password,
+      }));
       setProfile(demoProfile);
       return { error: null };
     }

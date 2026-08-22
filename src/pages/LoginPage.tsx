@@ -47,15 +47,15 @@ export function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-navy-200 mb-1.5">Email</label>
+              <label className="block text-sm font-medium text-navy-200 mb-1.5">Email yoki telefon raqam</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-navy-400" />
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field pl-11"
-                  placeholder="email@example.com"
+                  placeholder="email@example.com yoki +998 90 123 45 67"
                   required
                 />
               </div>
