@@ -26,14 +26,36 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function profileFromUser(user: User): Profile {
+function fallbackProfileFromUser(user: User): Profile {
   return {
     id: user.id,
     full_name: String(user.user_metadata?.full_name ?? user.email ?? 'Foydalanuvchi'),
     phone: user.user_metadata?.phone ?? user.phone ?? null,
     email: user.email ?? null,
-    role: user.user_metadata?.role === 'admin' ? 'admin' : 'customer',
+    role: 'customer',
     created_at: user.created_at,
+  };
+}
+
+// Role must come from the `profiles` table (protected by RLS), never from the
+// user's own JWT metadata — metadata is client-controllable at sign-up time
+// and would let anyone self-declare as admin.
+async function fetchProfile(user: User): Promise<Profile> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, phone, email, role, created_at')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (error || !data) return fallbackProfileFromUser(user);
+
+  return {
+    id: data.id,
+    full_name: data.full_name ?? user.email ?? 'Foydalanuvchi',
+    phone: data.phone ?? null,
+    email: data.email ?? user.email ?? null,
+    role: String(data.role ?? '').toLowerCase() === 'admin' ? 'admin' : 'customer',
+    created_at: data.created_at,
   };
 }
 
@@ -50,31 +72,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
+    let cancelled = false;
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (cancelled) return;
       setSession(data.session);
-      setProfile(data.session?.user ? profileFromUser(data.session.user) : null);
-      setLoading(false);
+      setProfile(data.session?.user ? await fetchProfile(data.session.user) : null);
+      if (!cancelled) setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      if (cancelled) return;
       setSession(sess);
       if (!sess) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      const nextProfile = await fetchProfile(sess.user);
+      if (!cancelled) {
+        setProfile(nextProfile);
         setLoading(false);
       }
-      setProfile(sess?.user ? profileFromUser(sess.user) : null);
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  useEffect(() => {
-    if (!session?.user) return;
-    setProfile(profileFromUser(session.user));
-    setLoading(false);
-  }, [session]);
-
   const refreshProfile = async () => {
-    if (session?.user) setProfile(profileFromUser(session.user));
+    if (session?.user) setProfile(await fetchProfile(session.user));
   };
 
   const signIn = async (identifier: string, password: string) => {

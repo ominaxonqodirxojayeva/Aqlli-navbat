@@ -1,4 +1,8 @@
 /*
+# [SUPERSEDED] Seed data for the early "TimeFlow AI" schema draft above — not
+# used by the current app (see 20260817094900_create_timeflow_schema.sql).
+# Kept as-is for migration history continuity.
+
 # TimeFlow AI — Demo data seed
 
 1. Purpose

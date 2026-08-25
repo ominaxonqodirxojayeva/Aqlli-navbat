@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Building2,
-  AlertCircle,
-  CheckCircle2,
-  X,
-  Hospital,
-  Banknote,
-  Search,
-} from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2, Search } from 'lucide-react';
 import { DashboardLayout } from '@/components/DashboardLayout';
-import { Card, Badge, EmptyState, Spinner } from '@/components/ui';
+import { Card, EmptyState, Spinner } from '@/components/ui';
 import { supabase, type Organization } from '@/lib/supabase';
+import { OrganizationList } from './admin-organizations/OrganizationList';
+import { OrganizationFormModal, type OrganizationFormData } from './admin-organizations/OrganizationFormModal';
+
+const emptyFormData: OrganizationFormData = {
+  name: '',
+  type: 'clinic',
+  prefix: 'P',
+  slug: '',
+  description: '',
+  is_active: true,
+};
 
 export function AdminOrganizationsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -23,14 +23,7 @@ export function AdminOrganizationsPage() {
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'clinic' | 'bank'>('all');
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'clinic' as 'clinic' | 'bank',
-    prefix: 'P',
-    slug: '',
-    description: '',
-    is_active: true,
-  });
+  const [formData, setFormData] = useState<OrganizationFormData>(emptyFormData);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -76,7 +69,7 @@ export function AdminOrganizationsPage() {
         is_active: org.is_active,
       });
     } else {
-      setFormData({ name: '', type: 'clinic', prefix: 'P', slug: '', description: '', is_active: true });
+      setFormData(emptyFormData);
     }
     setSaveError(null);
     setShowModal(true);
@@ -217,194 +210,24 @@ export function AdminOrganizationsPage() {
         </div>
       </Card>
 
-      <Card>
-        {filteredOrgs.length === 0 ? (
-          <EmptyState
-            icon={<Building2 className="w-8 h-8" />}
-            title="Tashkilotlar yo'q"
-            description="Birinchi tashkilotni qo'shing"
-            action={<button onClick={() => openModal(null)} className="btn-primary">Tashkilot qo'shish</button>}
-          />
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredOrgs.map((org) => (
-              <div key={org.id} className="glass p-5 rounded-xl card-hover">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      org.type === 'clinic'
-                        ? 'bg-electric-500/10 text-electric-400'
-                        : 'bg-accent-500/10 text-accent-400'
-                    }`}>
-                      {org.type === 'clinic' ? <Hospital className="w-5 h-5" /> : <Banknote className="w-5 h-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-white font-semibold truncate">{org.name}</h4>
-                      <p className="text-xs text-navy-500 mt-0.5">
-                        {org.type === 'clinic' ? 'Poliklinika' : 'Bank'} · Prefix: {org.prefix}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className={org.is_active
-                    ? 'text-success-500 bg-success-500/10 border-success-500/20'
-                    : 'text-navy-400 bg-navy-500/10 border-navy-500/20'
-                  }>
-                    {org.is_active ? 'Faol' : 'Nofaol'}
-                  </Badge>
-                </div>
+      <OrganizationList
+        organizations={filteredOrgs}
+        onAddNew={() => openModal(null)}
+        onEdit={openModal}
+        onToggleActive={handleToggleActive}
+        onDelete={handleDelete}
+      />
 
-                {org.slug && (
-                  <p className="text-xs text-navy-500 mb-3 font-mono">/{org.slug}</p>
-                )}
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openModal(org)}
-                    className="btn-secondary flex-1 text-sm flex items-center justify-center gap-1"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                    Tahrirlash
-                  </button>
-                  <button
-                    onClick={() => handleToggleActive(org)}
-                    className="px-3 py-2 rounded-xl glass text-navy-300 hover:text-white hover:bg-white/10 transition-colors text-sm"
-                    title={org.is_active ? 'Nofaol qilish' : 'Faol qilish'}
-                  >
-                    <Building2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(org)}
-                    className="px-3 py-2 rounded-xl bg-error-500/10 text-error-400 hover:bg-error-500/20 transition-colors"
-                    title="O'chirish"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="glass-card p-6 w-full max-w-md animate-scale-in">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">
-                {editingOrg ? 'Tashkilotni tahrirlash' : 'Yangi tashkilot'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-navy-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {saveError && (
-              <div className="mb-4 p-3 rounded-xl bg-error-500/10 border border-error-500/20 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-error-400 flex-shrink-0" />
-                <p className="text-sm text-error-300">{saveError}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-navy-200 mb-1.5">Tashkilot turi</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, type: 'clinic', prefix: 'P' })}
-                    className={`p-3 rounded-xl border flex items-center gap-2 transition-all ${
-                      formData.type === 'clinic'
-                        ? 'bg-electric-500/10 border-electric-500/30 text-electric-300'
-                        : 'glass border-white/10 text-navy-400'
-                    }`}
-                  >
-                    <Hospital className="w-5 h-5" />
-                    <span className="text-sm font-medium">Poliklinika</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, type: 'bank', prefix: 'B' })}
-                    className={`p-3 rounded-xl border flex items-center gap-2 transition-all ${
-                      formData.type === 'bank'
-                        ? 'bg-accent-500/10 border-accent-500/30 text-accent-300'
-                        : 'glass border-white/10 text-navy-400'
-                    }`}
-                  >
-                    <Banknote className="w-5 h-5" />
-                    <span className="text-sm font-medium">Bank</span>
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-navy-200 mb-1.5">Nomi</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="input-field"
-                  placeholder="12-son Poliklinika"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-navy-200 mb-1.5">Prefix</label>
-                  <input
-                    type="text"
-                    value={formData.prefix}
-                    onChange={(e) => setFormData({ ...formData, prefix: e.target.value.toUpperCase().slice(0, 3) })}
-                    className="input-field"
-                    placeholder="P"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-navy-200 mb-1.5">Slug (URL)</label>
-                  <input
-                    type="text"
-                    value={formData.slug}
-                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                    className="input-field"
-                    placeholder="clinic-12"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-navy-200 mb-1.5">Tavsif</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="input-field"
-                  placeholder="Tashkilot tavsifi"
-                  rows={2}
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="org_is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded border-white/20 bg-navy-900"
-                />
-                <label htmlFor="org_is_active" className="text-sm text-navy-200">Faol</label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {saving ? 'Saqlanmoqda...' : 'Saqlash'}
-              </button>
-            </form>
-          </div>
-        </div>
+        <OrganizationFormModal
+          editingOrg={editingOrg}
+          formData={formData}
+          onChange={setFormData}
+          saveError={saveError}
+          saving={saving}
+          onClose={() => setShowModal(false)}
+          onSubmit={handleSave}
+        />
       )}
     </DashboardLayout>
   );

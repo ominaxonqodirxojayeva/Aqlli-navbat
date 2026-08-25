@@ -1,4 +1,10 @@
 /*
+# [SUPERSEDED] Early "TimeFlow AI" schema draft — not used by the current app.
+# The app now runs on the `navbat_*` tables (see 20260817104342_create_navbat_schema.sql
+# onward: organizations, navbat_queues, navbat_queue_settings, notifications).
+# Kept as-is (not deleted/renamed) so migration history stays intact for any
+# project this already ran against. Do not build new features on this schema.
+
 # TimeFlow AI — Core schema
 
 1. Overview
