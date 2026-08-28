@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Clock,
   Users,
   Timer,
   ArrowLeft,
@@ -14,125 +13,62 @@ import {
   Ticket,
   Hospital,
   Banknote,
+  Megaphone,
+  CalendarClock,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, Badge, EmptyState, Spinner } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
-import { supabase, type NavbatQueueWithService, type NavbatQueueSettings, type QueueStatus } from '@/lib/supabase';
-import { STATUS_LABELS, STATUS_COLORS, STATUS_DOT_COLORS, formatMinutes } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { supabase } from '@/lib/supabase';
+import { useMyQueue } from '@/lib/queue';
+import { STATUS_LABELS, STATUS_COLORS, STATUS_DOT_COLORS, formatMinutes, formatTime } from '@/lib/utils';
+import { reportError } from '@/lib/errors';
+import { showBrowserNotification, useBrowserNotificationPermission } from '@/lib/notifications';
 
 export function QueueDetailPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
-  const [queue, setQueue] = useState<NavbatQueueWithService | null>(null);
-  const [settings, setSettings] = useState<NavbatQueueSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [peopleAhead, setPeopleAhead] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const previousStatus = useRef<string | null>(null);
 
-  const loadData = async () => {
-    if (!profile?.id) return;
-    setError(null);
-    try {
-      const { data, error: qErr } = await supabase
-        .from('navbat_queues')
-        .select('*, service:navbat_services(*), organization:organizations(*)')
-        .eq('user_id', profile.id)
-        .in('status', ['waiting', 'serving'])
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+  useBrowserNotificationPermission();
 
-      if (qErr) throw qErr;
-      const q = data as unknown as NavbatQueueWithService | null;
-      setQueue(q);
+  const { data: queue, isLoading, error, refetch, invalidate } = useMyQueue(profile?.id);
 
-      if (q) {
-        // Get settings by organization_id or service_id
-        let settingsQuery = supabase.from('navbat_queue_settings').select('*');
-        if (q.organization_id) {
-          settingsQuery = settingsQuery.eq('organization_id', q.organization_id);
-        } else if (q.service_id) {
-          settingsQuery = settingsQuery.eq('service_id', q.service_id);
-        }
-        const { data: s } = await settingsQuery.maybeSingle();
-        setSettings(s as NavbatQueueSettings | null);
+  useEffect(() => {
+    const current = queue?.status ?? null;
+    const previous = previousStatus.current;
+    previousStatus.current = current;
 
-        // Count people ahead: waiting queues in same org created before this one
-        if (q.organization_id) {
-          const { count } = await supabase
-            .from('navbat_queues')
-            .select('*', { count: 'exact', head: true })
-            .eq('organization_id', q.organization_id)
-            .eq('status', 'waiting')
-            .lt('created_at', q.created_at)
-            .neq('id', q.id);
-          setPeopleAhead(count ?? 0);
-        }
-      }
-    } catch {
-      setError('Ma\'lumotlarni yuklashda xatolik yuz berdi.');
-    } finally {
-      setLoading(false);
+    if (!current || !previous || current === previous) return;
+
+    if (current === 'serving') {
+      setNotification('Navbatingiz chaqirildi! Xizmat ko\'rsatish joyiga boring.');
+      showBrowserNotification('Aqlli Navbat', `${queue?.queue_number} — navbatingiz keldi!`);
     }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [profile?.id]);
-
-  // Real-time subscription
-  useEffect(() => {
-    if (!queue?.id) return;
-    const previousStatus = queue.status;
-
-    const channel = supabase
-      .channel(`detail-${queue.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'navbat_queues', filter: `id=eq.${queue.id}` },
-        (payload) => {
-          const updated = payload.new as { status: QueueStatus };
-          if (updated.status === 'serving' && previousStatus === 'waiting') {
-            setNotification('Navbatingiz chaqirildi! Xizmat ko\'rsatish joyiga boring.');
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification('Aqlli Navbat', { body: 'Navbatingiz chaqirildi!' });
-            }
-          } else if (updated.status === 'completed' && previousStatus !== 'completed') {
-            setNotification('Xizmat yakunlandi.');
-          } else if (updated.status === 'skipped' && previousStatus !== 'skipped') {
-            setNotification('Navbatingiz o\'tkazib yuborildi.');
-          }
-          loadData();
-        }
-      )
-      .subscribe();
-
-    return () => { void supabase.removeChannel(channel); };
-  }, [queue?.id]);
-
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
+  }, [queue?.status, queue?.queue_number]);
 
   const handleCancel = async () => {
     if (!queue) return;
     setCancelling(true);
-    await supabase
-      .from('navbat_queues')
-      .update({ status: 'cancelled' })
-      .eq('id', queue.id);
-    setCancelling(false);
-    navigate('/dashboard');
+    setActionError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('cancel_my_queue', { p_queue_id: queue.id });
+      if (rpcError) throw rpcError;
+      await invalidate();
+      navigate('/dashboard');
+    } catch (err) {
+      setActionError(reportError('QueueDetail.cancel', err, 'Navbatni bekor qilishda xatolik yuz berdi.'));
+    } finally {
+      setCancelling(false);
+    }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <DashboardLayout activePage="/my-queue" role="customer">
         <div className="flex items-center justify-center py-20">
@@ -149,9 +85,11 @@ export function QueueDetailPage() {
           <EmptyState
             icon={<AlertCircle className="w-8 h-8" />}
             title="Xatolik"
-            description={error}
+            description={reportError('QueueDetail.load', error, 'Ma\'lumotlarni yuklashda xatolik yuz berdi.')}
             action={
-              <button onClick={loadData} className="btn-primary">Qayta urinish</button>
+              <button onClick={() => void refetch()} className="btn-primary">
+                Qayta urinish
+              </button>
             }
           />
         </Card>
@@ -168,7 +106,9 @@ export function QueueDetailPage() {
             title="Faol navbat yo'q"
             description="Sizda hozirda faol navbat mavjud emas"
             action={
-              <Link to="/get-queue" className="btn-primary">Navbat olish</Link>
+              <Link to="/get-queue" className="btn-primary">
+                Navbat olish
+              </Link>
             }
           />
         </Card>
@@ -176,12 +116,12 @@ export function QueueDetailPage() {
     );
   }
 
-  const orgName = queue.organization?.name ?? queue.service?.name ?? 'Noma\'lum';
-  const orgType = queue.organization?.type;
-  const waitTime = queue.estimated_wait_time;
+  const orgName = queue.organization_name ?? 'Noma\'lum';
+  const orgType = queue.organization_type;
 
-  const qrData = queue.organization?.slug
-    ? `${window.location.origin}/join/${queue.organization.slug}`
+  // QR kod xodim uchun: shu tashkilotning navbat sahifasiga havola.
+  const qrData = queue.organization_slug
+    ? `${window.location.origin}/join/${queue.organization_slug}`
     : `${window.location.origin}/get-queue`;
 
   return (
@@ -197,9 +137,20 @@ export function QueueDetailPage() {
         <div className="mb-6 p-4 rounded-xl bg-electric-500/10 border border-electric-500/20 flex items-center gap-3 animate-fade-in-up">
           <Bell className="w-5 h-5 text-electric-400 flex-shrink-0" />
           <p className="text-sm text-electric-300">{notification}</p>
-          <button onClick={() => setNotification(null)} className="ml-auto text-electric-400 hover:text-electric-300">
+          <button
+            onClick={() => setNotification(null)}
+            className="ml-auto text-electric-400 hover:text-electric-300"
+            aria-label="Yopish"
+          >
             <XCircle className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="mb-6 p-4 rounded-xl bg-error-500/10 border border-error-500/20 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-error-400 flex-shrink-0" />
+          <p className="text-sm text-error-300">{actionError}</p>
         </div>
       )}
 
@@ -209,13 +160,14 @@ export function QueueDetailPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <p className="text-sm text-navy-400 mb-1">Sizning navbatingiz</p>
-              <h2 className="text-5xl font-extrabold text-white tracking-tight">
-                {queue.queue_number}
-              </h2>
+              <h2 className="text-5xl font-extrabold text-white tracking-tight">{queue.queue_number}</h2>
               <div className="flex items-center gap-2 mt-2">
                 {orgType === 'clinic' && <Hospital className="w-4 h-4 text-electric-400" />}
                 {orgType === 'bank' && <Banknote className="w-4 h-4 text-accent-400" />}
-                <p className="text-sm text-navy-300">{orgName}</p>
+                <p className="text-sm text-navy-300">
+                  {orgName}
+                  {queue.service_name ? ` · ${queue.service_name}` : ''}
+                </p>
               </div>
             </div>
             <Badge className={STATUS_COLORS[queue.status]}>
@@ -224,42 +176,55 @@ export function QueueDetailPage() {
             </Badge>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="glass p-4 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-4 h-4 text-electric-400" />
-                <p className="text-xs text-navy-400">Hozir</p>
+                <Megaphone className="w-4 h-4 text-electric-400" />
+                <p className="text-xs text-navy-400">Hozir chaqirilmoqda</p>
               </div>
-              <p className="text-lg font-bold text-electric-400">
-                {settings ? `${settings.prefix}-${String(settings.current_number).padStart(3, '0')}` : '—'}
-              </p>
+              <p className="text-lg font-bold text-electric-400">{queue.serving_number ?? '—'}</p>
             </div>
             <div className="glass p-4 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <Users className="w-4 h-4 text-accent-400" />
-                <p className="text-xs text-navy-400">Oldinda</p>
+                <p className="text-xs text-navy-400">Oldingizda</p>
               </div>
-              <p className="text-lg font-bold text-accent-400">{peopleAhead} kishi</p>
+              <p className="text-lg font-bold text-accent-400">{queue.people_ahead} kishi</p>
             </div>
             <div className="glass p-4 rounded-xl">
               <div className="flex items-center gap-2 mb-1">
                 <Timer className="w-4 h-4 text-warning-400" />
                 <p className="text-xs text-navy-400">Taxminiy kutish</p>
               </div>
-              <p className="text-lg font-bold text-warning-400">{formatMinutes(waitTime)}</p>
+              <p className="text-lg font-bold text-warning-400">
+                {formatMinutes(queue.estimated_wait_minutes)}
+              </p>
+            </div>
+            <div className="glass p-4 rounded-xl">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarClock className="w-4 h-4 text-success-400" />
+                <p className="text-xs text-navy-400">Navbat olingan</p>
+              </div>
+              <p className="text-lg font-bold text-success-400">{formatTime(queue.created_at)}</p>
             </div>
           </div>
 
+          {!queue.is_open && queue.status === 'waiting' && (
+            <div className="mb-6 p-4 rounded-xl bg-warning-500/10 border border-warning-500/20 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-warning-400 flex-shrink-0" />
+              <p className="text-sm text-warning-300">
+                Bu tashkilotda navbat qabuli vaqtincha yopilgan. Sizning navbatingiz saqlanib turadi.
+              </p>
+            </div>
+          )}
+
           {queue.status === 'waiting' && (
             <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => setShowQR(!showQR)}
-                className="btn-primary flex items-center gap-2"
-              >
+              <button onClick={() => setShowQR(!showQR)} className="btn-primary flex items-center gap-2">
                 <QrCode className="w-4 h-4" />
                 {showQR ? 'QR yashirish' : 'QR kod'}
               </button>
-              <button onClick={loadData} className="btn-secondary flex items-center gap-2">
+              <button onClick={() => void refetch()} className="btn-secondary flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Yangilash
               </button>
@@ -281,15 +246,11 @@ export function QueueDetailPage() {
               </div>
               <div>
                 <p className="text-lg font-bold text-electric-300">Navbatingiz chaqirildi!</p>
-                <p className="text-sm text-electric-200 mt-1">Iltimos, xizmat ko'rsatish joyiga boring.</p>
+                <p className="text-sm text-electric-200 mt-1">
+                  Iltimos, xizmat ko'rsatish joyiga boring.
+                  {queue.called_at ? ` Chaqirilgan vaqt: ${formatTime(queue.called_at)}.` : ''}
+                </p>
               </div>
-            </div>
-          )}
-
-          {queue.status === 'completed' && (
-            <div className="p-4 rounded-xl bg-success-500/10 border border-success-500/20 flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-success-400 flex-shrink-0" />
-              <p className="text-sm text-success-300">Xizmat yakunlandi.</p>
             </div>
           )}
         </div>
@@ -301,14 +262,17 @@ export function QueueDetailPage() {
           <div className="inline-block p-6 bg-white rounded-2xl mb-4">
             <QRCodeSVG value={qrData} size={200} level="M" />
           </div>
-          <p className="text-sm text-navy-400">
-            Xodimga ushbu QR kodni ko'rsating
-          </p>
-          <p className="text-xs text-navy-500 mt-2">
-            Navbat: {queue.queue_number}
-          </p>
+          <p className="text-sm text-navy-400">Xodimga ushbu QR kodni ko'rsating</p>
+          <p className="text-xs text-navy-500 mt-2">Navbat: {queue.queue_number}</p>
         </Card>
       )}
+
+      <div className="mt-6 flex justify-center">
+        <Link to="/history" className="btn-ghost text-sm inline-flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" />
+          Oldingi navbatlarim
+        </Link>
+      </div>
     </DashboardLayout>
   );
 }

@@ -8,9 +8,8 @@ import {
   X,
   Bell,
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
-import { supabase, type Notification } from '@/lib/supabase';
-import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/lib/auth-context';
+import { useNotifications } from '@/lib/notifications';
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -29,40 +28,31 @@ export function Logo({ className = '' }: { className?: string }) {
 }
 
 export function Navbar() {
-  const { session, profile, signOut } = useAuth();
+  const { profile, signOut, isStaff } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const navigate = useNavigate();
 
-  const { data: notifications } = useQuery<Notification[]>({
-    queryKey: ['notifications', session?.user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', session!.user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-      return (data ?? []) as Notification[];
-    },
-    enabled: !!session?.user,
-    refetchInterval: 15000,
-  });
-
-  const unreadCount = notifications?.filter((n) => !n.is_read).length ?? 0;
+  const { notifications, unreadCount, markAllRead } = useNotifications(profile?.id);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
   };
 
-  const dashboardLink = profile?.role === 'admin' ? '/admin' : '/dashboard';
+  const handleToggleNotifications = () => {
+    const opening = !notifOpen;
+    setNotifOpen(opening);
+    if (opening) markAllRead();
+  };
+
+  const dashboardLink = isStaff ? '/admin' : '/dashboard';
 
   const navLinks = [
     { label: 'Bosh sahifa', href: '/' },
-    { label: 'Xizmatlar', href: '/#services' },
+    { label: 'Qanday ishlaydi', href: '/#how' },
     { label: 'Mening navbatim', href: '/my-queue' },
-    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Dashboard', href: dashboardLink },
     { label: 'Display', href: '/display' },
   ];
 
@@ -82,26 +72,27 @@ export function Navbar() {
             </nav>
 
             <div className="flex items-center gap-2">
-              {session ? (
+              {profile ? (
                 <>
                   <div className="relative">
                     <button
-                      onClick={() => setNotifOpen(!notifOpen)}
+                      onClick={handleToggleNotifications}
                       className="relative p-2.5 rounded-xl glass-light hover:bg-white/10 transition-colors"
+                      aria-label="Bildirishnomalar"
                     >
                       <Bell className="w-5 h-5 text-navy-200" />
                       {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error-500 text-white text-[10px] font-bold flex items-center justify-center">
-                          {unreadCount}
+                        <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-error-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
                     </button>
                     {notifOpen && (
-                      <div className="absolute right-0 mt-2 w-80 glass-card p-2 animate-scale-in origin-top-right">
+                      <div className="absolute right-0 mt-2 w-80 glass-card p-2 animate-scale-in origin-top-right bg-navy-950/95">
                         <div className="px-3 py-2 text-xs font-semibold text-navy-400 uppercase tracking-wider">
                           Bildirishnomalar
                         </div>
-                        {notifications && notifications.length > 0 ? (
+                        {notifications.length > 0 ? (
                           <div className="max-h-80 overflow-y-auto scrollbar-thin space-y-1">
                             {notifications.map((n) => (
                               <div
@@ -171,7 +162,7 @@ export function Navbar() {
                     {link.label}
                   </a>
                 ))}
-                {!session && (
+                {!profile && (
                   <div className="flex gap-2 mt-2">
                     <Link to="/login" onClick={() => setMobileOpen(false)} className="btn-secondary flex-1 text-center text-sm">
                       Kirish

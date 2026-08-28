@@ -76,6 +76,7 @@ export interface Profile {
 
 export interface NavbatService {
   id: string;
+  organization_id: string | null;
   name: string;
   description: string | null;
   average_time: number;
@@ -118,6 +119,9 @@ export interface NavbatQueue {
   user_id: string;
   status: QueueStatus;
   estimated_wait_time: number;
+  /** Navbat olayotganda kiritilgan ism (profil nomidan farq qilishi mumkin). */
+  full_name: string | null;
+  phone: string | null;
   created_at: string;
   called_at: string | null;
   completed_at: string | null;
@@ -137,8 +141,99 @@ export interface NavbatQueueWithDetails extends NavbatQueue {
 export interface Notification {
   id: string;
   user_id: string;
+  queue_id: string | null;
   title: string;
   body: string;
   is_read: boolean;
   created_at: string;
+}
+
+export type OrgMemberRole = 'owner' | 'operator';
+
+export interface OrganizationMember {
+  organization_id: string;
+  user_id: string;
+  role: OrgMemberRole;
+  created_at: string;
+}
+
+export interface OrganizationMemberWithDetails extends OrganizationMember {
+  organization: Organization | null;
+  profile: Profile | null;
+}
+
+/** `get_my_queue_status()` RPC natijasi — mijozning joriy navbati. */
+export interface MyQueueStatus {
+  id: string;
+  queue_number: string;
+  status: QueueStatus;
+  created_at: string;
+  called_at: string | null;
+  organization_id: string | null;
+  organization_name: string | null;
+  organization_type: string | null;
+  organization_slug: string | null;
+  service_name: string | null;
+  average_time: number;
+  people_ahead: number;
+  serving_number: string | null;
+  estimated_wait_minutes: number;
+  is_open: boolean;
+}
+
+/** `get_public_org_display()` RPC natijasi — display ekrani uchun. */
+export interface PublicDisplayRow {
+  id: string;
+  queue_number: string;
+  status: QueueStatus;
+  service_name: string | null;
+}
+
+/** `get_public_org_state()` RPC natijasi. */
+export interface PublicOrgState {
+  is_open: boolean;
+  waiting_count: number;
+  serving_number: string | null;
+}
+
+/** `create_org_queue()` RPC natijasi. */
+export interface CreatedQueue {
+  id: string;
+  queue_number: string;
+  status: QueueStatus;
+  estimated_wait_time: number;
+  organization_name: string;
+  organization_prefix: string;
+  service_name: string | null;
+  people_ahead: number;
+}
+
+/** `get_org_stats()` RPC natijasi. */
+export interface OrgStats {
+  total: number;
+  waiting: number;
+  serving: number;
+  completed: number;
+  skipped: number;
+  cancelled: number;
+  avg_wait_minutes: number;
+  avg_service_minutes: number;
+}
+
+export interface HourlyStat {
+  hour: number;
+  total: number;
+}
+
+export interface DailyStat {
+  day: string;
+  total: number;
+  completed: number;
+}
+
+export interface OrgBreakdownRow {
+  organization_id: string;
+  organization_name: string;
+  total: number;
+  completed: number;
 }

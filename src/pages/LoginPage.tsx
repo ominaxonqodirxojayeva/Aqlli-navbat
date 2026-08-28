@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Clock, Mail, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { Logo } from '@/components/Navbar';
 
 export function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, isStaff } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,12 +16,13 @@ export function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const result = await signIn(email, password);
     setLoading(false);
-    if (error) {
-      setError(error);
+    if (result.error) {
+      setError(result.error);
     } else {
-      navigate('/dashboard');
+      // Xodim bo'lsa PublicOnlyRoute uni admin panelga yo'naltiradi.
+      navigate(isStaff ? '/admin' : '/dashboard');
     }
   };
 
@@ -47,15 +48,16 @@ export function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-navy-200 mb-1.5">Email yoki telefon raqam</label>
+              <label className="block text-sm font-medium text-navy-200 mb-1.5">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-navy-400" />
                 <input
-                  type="text"
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field pl-11"
-                  placeholder="email@example.com yoki +998 90 123 45 67"
+                  placeholder="email@example.com"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -71,6 +73,7 @@ export function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="input-field pl-11"
                   placeholder="••••••••"
+                  autoComplete="current-password"
                   required
                 />
               </div>

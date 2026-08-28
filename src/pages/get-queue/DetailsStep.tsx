@@ -1,103 +1,139 @@
-import { AlertCircle, ArrowLeft, Banknote, Hospital, Loader2, PlusCircle, User, Phone } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Banknote, Hospital, Loader2, PlusCircle, User, Phone, ListChecks } from 'lucide-react';
 import { Card } from '@/components/ui';
-import type { NavbatQueue, Organization } from '@/lib/supabase';
-import { formatPhoneInput } from './shared';
+import type { NavbatService, Organization } from '@/lib/supabase';
+import { formatPhoneInput } from '@/lib/validation';
 
 export function DetailsStep({
   selectedOrg,
+  selectedService,
   hideBack,
   fullName,
   onFullNameChange,
-  defaultFullName,
   phone,
   onPhoneChange,
   issueError,
   issuing,
-  activeQueue,
+  hasActiveQueue,
+  queueClosed,
   onBack,
   onSubmit,
 }: {
   selectedOrg: Organization;
+  selectedService: NavbatService | null;
   hideBack: boolean;
   fullName: string;
   onFullNameChange: (value: string) => void;
-  defaultFullName: string;
   phone: string;
   onPhoneChange: (value: string) => void;
   issueError: string | null;
   issuing: boolean;
-  activeQueue: NavbatQueue | null;
+  hasActiveQueue: boolean;
+  queueClosed: boolean;
   onBack: () => void;
   onSubmit: () => void;
 }) {
+  const disabled = issuing || hasActiveQueue || queueClosed;
+
   return (
     <div className="max-w-md mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        {!hideBack && (
+      {!hideBack && (
+        <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="btn-ghost text-sm flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" /> Orqaga
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <Card className="mb-6">
         <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            selectedOrg.type === 'clinic'
-              ? 'bg-electric-500/10 text-electric-400'
-              : 'bg-accent-500/10 text-accent-400'
-          }`}>
+          <div
+            className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              selectedOrg.type === 'clinic'
+                ? 'bg-electric-500/10 text-electric-400'
+                : 'bg-accent-500/10 text-accent-400'
+            }`}
+          >
             {selectedOrg.type === 'clinic' ? <Hospital className="w-6 h-6" /> : <Banknote className="w-6 h-6" />}
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-navy-400">Tanlangan tashkilot</p>
-            <h3 className="text-lg font-bold text-white">{selectedOrg.name}</h3>
+            <h3 className="text-lg font-bold text-white truncate">{selectedOrg.name}</h3>
+            {selectedService && (
+              <p className="text-xs text-navy-400 mt-0.5 flex items-center gap-1">
+                <ListChecks className="w-3.5 h-3.5" />
+                {selectedService.name} · ~{selectedService.average_time} daqiqa
+              </p>
+            )}
           </div>
         </div>
       </Card>
 
+      {queueClosed && (
+        <div className="mb-6 p-4 rounded-xl bg-warning-500/10 border border-warning-500/20 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-warning-400 flex-shrink-0" />
+          <p className="text-sm text-warning-300">
+            Bu tashkilotda navbat qabuli hozircha yopiq. Keyinroq urinib ko'ring.
+          </p>
+        </div>
+      )}
+
       {issueError && (
-        <div className="mb-6 p-4 rounded-xl bg-error-500/10 border border-error-500/20 flex items-center gap-3 animate-fade-in-up">
-          <AlertCircle className="w-5 h-5 text-error-400 flex-shrink-0" />
+        <div className="mb-6 p-4 rounded-xl bg-error-500/10 border border-error-500/20 flex items-start gap-3 animate-fade-in-up">
+          <AlertCircle className="w-5 h-5 text-error-400 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-error-300">{issueError}</p>
         </div>
       )}
 
       <Card>
-        <div className="space-y-5">
+        <form
+          className="space-y-5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+        >
           <div>
-            <label className="block text-sm font-medium text-navy-200 mb-2">Ismingiz</label>
+            <label className="block text-sm font-medium text-navy-200 mb-2" htmlFor="queue-full-name">
+              Ismingiz
+            </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-navy-400" />
               <input
+                id="queue-full-name"
                 type="text"
                 value={fullName}
                 onChange={(e) => onFullNameChange(e.target.value)}
                 className="input-field pl-11"
                 placeholder="Ismingizni kiriting"
-                defaultValue={defaultFullName}
+                autoComplete="name"
+                required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-navy-200 mb-2">Telefon raqamingiz</label>
+            <label className="block text-sm font-medium text-navy-200 mb-2" htmlFor="queue-phone">
+              Telefon raqamingiz
+            </label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-navy-400" />
               <input
+                id="queue-phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => onPhoneChange(formatPhoneInput(e.target.value))}
                 className="input-field pl-11"
                 placeholder="+998 __ ___ __ __"
+                autoComplete="tel"
+                required
               />
             </div>
             <p className="text-xs text-navy-500 mt-1.5">Format: +998 XX XXX XX XX</p>
           </div>
 
           <button
-            onClick={onSubmit}
-            disabled={issuing || !!activeQueue}
+            type="submit"
+            disabled={disabled}
             className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {issuing ? (
@@ -112,7 +148,7 @@ export function DetailsStep({
               </>
             )}
           </button>
-        </div>
+        </form>
       </Card>
     </div>
   );

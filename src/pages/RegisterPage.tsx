@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Clock, Mail, Lock, User, Phone, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { Clock, Mail, Lock, User, Phone, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 import { Logo } from '@/components/Navbar';
+import { formatPhoneInput, PASSWORD_MIN_LENGTH } from '@/lib/validation';
 
 export function RegisterPage() {
   const { signUp } = useAuth();
@@ -13,33 +14,35 @@ export function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
 
     if (password !== confirmPassword) {
-      setError('Parollar mos kelmadi');
-      return;
-    }
-    if (password.length !== 6) {
-      setError('Parol aynan 6 ta belgidan iborat bo\'lishi kerak');
-      return;
-    }
-    if (!/^\+998\s?\d{2}\s?\d{3}\s?\d{2}\s?\d{2}$/.test(phone.trim())) {
-      setError('Telefon raqamni to\'g\'ri kiriting: +998 XX XXX XX XX');
+      setError('Parollar mos kelmadi.');
       return;
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password, fullName, phone);
+    // Qolgan tekshiruvlar (email, parol kuchi, telefon formati) `signUp`
+    // ichida — barchasi src/lib/validation.ts dagi yagona qoidalarga tayanadi.
+    const result = await signUp(email, password, fullName, phone);
     setLoading(false);
-    if (error) {
-      setError(error);
-    } else {
-      navigate('/get-queue');
+
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+    if (result.notice) {
+      // Muvaffaqiyat, lekin emailni tasdiqlash kerak — bu xato emas.
+      setNotice(result.notice);
+      return;
+    }
+    navigate('/get-queue');
   };
 
   return (
@@ -56,9 +59,24 @@ export function RegisterPage() {
 
         <div className="glass-card p-6 sm:p-8">
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-error-500/10 border border-error-500/20 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-error-400 flex-shrink-0" />
+            <div className="mb-4 p-3 rounded-xl bg-error-500/10 border border-error-500/20 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-error-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-error-300">{error}</p>
+            </div>
+          )}
+
+          {notice && (
+            <div className="mb-4 p-4 rounded-xl bg-success-500/10 border border-success-500/20 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-success-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-success-300">{notice}</p>
+                <Link
+                  to="/login"
+                  className="text-sm text-electric-400 hover:text-electric-300 font-medium mt-2 inline-block"
+                >
+                  Kirish sahifasiga o'tish →
+                </Link>
+              </div>
             </div>
           )}
 
@@ -73,6 +91,7 @@ export function RegisterPage() {
                   onChange={(e) => setFullName(e.target.value)}
                   className="input-field pl-11"
                   placeholder="Aziz Karimov"
+                  autoComplete="name"
                   required
                 />
               </div>
@@ -85,9 +104,11 @@ export function RegisterPage() {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
                   className="input-field pl-11"
-                  placeholder="+998 90 123 45 67"
+                  placeholder="+998 __ ___ __ __"
+                  autoComplete="tel"
+                  required
                 />
               </div>
             </div>
@@ -102,6 +123,7 @@ export function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-field pl-11"
                   placeholder="email@example.com"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -116,11 +138,15 @@ export function RegisterPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input-field pl-11"
-                  placeholder="6 ta belgi"
-                  maxLength={6}
+                  placeholder={`Kamida ${PASSWORD_MIN_LENGTH} ta belgi`}
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
                   required
                 />
               </div>
+              <p className="text-xs text-navy-500 mt-1.5">
+                Kamida {PASSWORD_MIN_LENGTH} ta belgi, harf va raqam aralash bo'lsin.
+              </p>
             </div>
 
             <div>
@@ -132,8 +158,9 @@ export function RegisterPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="input-field pl-11"
-                  placeholder="6 ta belgi"
-                  maxLength={6}
+                  placeholder="Parolni qayta kiriting"
+                  autoComplete="new-password"
+                  minLength={PASSWORD_MIN_LENGTH}
                   required
                 />
               </div>

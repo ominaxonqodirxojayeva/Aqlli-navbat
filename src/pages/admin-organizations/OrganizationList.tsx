@@ -1,15 +1,17 @@
-import { Banknote, Building2, Hospital, Pencil, Trash2 } from 'lucide-react';
+import { Banknote, Building2, Hospital, Pencil, Power, Trash2 } from 'lucide-react';
 import { Badge, Card, EmptyState } from '@/components/ui';
 import type { Organization } from '@/lib/supabase';
 
 export function OrganizationList({
   organizations,
+  canDelete,
   onAddNew,
   onEdit,
   onToggleActive,
   onDelete,
 }: {
   organizations: Organization[];
+  canDelete: boolean;
   onAddNew: () => void;
   onEdit: (org: Organization) => void;
   onToggleActive: (org: Organization) => void;
@@ -69,15 +71,17 @@ export function OrganizationList({
                   className="px-3 py-2 rounded-xl glass text-navy-300 hover:text-white hover:bg-white/10 transition-colors text-sm"
                   title={org.is_active ? 'Nofaol qilish' : 'Faol qilish'}
                 >
-                  <Building2 className="w-4 h-4" />
+                  <Power className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => onDelete(org)}
-                  className="px-3 py-2 rounded-xl bg-error-500/10 text-error-400 hover:bg-error-500/20 transition-colors"
-                  title="O'chirish"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {canDelete && (
+                  <button
+                    onClick={() => onDelete(org)}
+                    className="px-3 py-2 rounded-xl bg-error-500/10 text-error-400 hover:bg-error-500/20 transition-colors"
+                    title="O'chirish"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

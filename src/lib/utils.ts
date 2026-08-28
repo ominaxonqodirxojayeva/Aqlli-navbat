@@ -1,16 +1,21 @@
-import { type QueueStatus, type NavbatQueue, type NavbatService, type NavbatQueueSettings } from '@/lib/supabase';
+import { type QueueStatus } from '@/lib/supabase';
 
+/**
+ * Daqiqalarni o'qishga qulay matnga aylantiradi: 5 -> "5 daqiqa",
+ * 125 -> "2 soat 5 daqiqa".
+ */
 export function formatMinutes(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0 daqiqa';
   if (minutes < 1) return '<1 daqiqa';
   if (minutes < 60) return `${Math.round(minutes)} daqiqa`;
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return m > 0 ? `${h} soat ${m} daqiqa` : `${h} soat`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
+  return rest > 0 ? `${hours} soat ${rest} daqiqa` : `${hours} soat`;
 }
 
 export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('uz-UZ', {
+  return new Date(dateStr).toLocaleDateString('uz-UZ', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -18,34 +23,35 @@ export function formatDate(dateStr: string): string {
 }
 
 export function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  return new Date(dateStr).toLocaleTimeString('uz-UZ', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
+/** "5 daqiqa oldin" ko'rinishidagi nisbiy vaqt. */
 export function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'hozir';
   if (mins < 60) return `${mins} daqiqa oldin`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} soat oldin`;
-  const days = Math.floor(hrs / 24);
+
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} soat oldin`;
+
+  const days = Math.floor(hours / 24);
   return `${days} kun oldin`;
 }
 
-export function calculateWaitTime(peopleAhead: number, averageTime: number): number {
-  if (peopleAhead <= 0) return 0;
-  return peopleAhead * averageTime;
-}
-
-export function getPeopleAhead(queue: NavbatQueue, settings: NavbatQueueSettings): number {
-  if (queue.status !== 'waiting') return 0;
-  const num = parseInt(queue.queue_number.split('-')[1] ?? '0', 10);
-  return Math.max(0, num - settings.current_number);
-}
-
-export function getEstimatedServiceTime(waitMinutes: number): Date {
-  return new Date(Date.now() + waitMinutes * 60000);
+/** Nomdan URL uchun qisqa nom yasaydi: "12-son Poliklinika" -> "12-son-poliklinika". */
+export function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['’`]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 export const STATUS_LABELS: Record<QueueStatus, string> = {
@@ -71,12 +77,3 @@ export const STATUS_DOT_COLORS: Record<QueueStatus, string> = {
   skipped: 'bg-navy-400',
   cancelled: 'bg-error-500',
 };
-
-export function getServiceIcon(service: NavbatService): string {
-  const name = service.name.toLowerCase();
-  if (name.includes('pasport') || name.includes('hujjat')) return '📄';
-  if (name.includes('maslahat') || name.includes('konsult')) return '💬';
-  if (name.includes('to\'lov') || name.includes('tolov')) return '💳';
-  if (name.includes('ma\'lumot') || name.includes('malumot') || name.includes('sprav')) return '📋';
-  return '🎫';
-}

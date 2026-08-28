@@ -1,19 +1,45 @@
+import { lazy, Suspense, type JSX } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from '@/lib/auth';
+import { AuthProvider } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { LoadingScreen } from '@/components/ui';
 import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { UserDashboard } from '@/pages/UserDashboard';
-import { GetQueuePage } from '@/pages/GetQueuePage';
-import { QueueDetailPage } from '@/pages/QueueDetailPage';
-import { AdminDashboard } from '@/pages/AdminDashboard';
-import { AdminServicesPage } from '@/pages/AdminServicesPage';
-import { AdminStatsPage } from '@/pages/AdminStatsPage';
-import { AdminOrganizationsPage } from '@/pages/AdminOrganizationsPage';
-import { DisplayPage } from '@/pages/LiveQueuePage';
-import type { JSX } from 'react';
+
+// Og'ir sahifalar alohida chunk'ga ajratiladi — bosh sahifa uchun recharts,
+// qrcode va admin panel kodini yuklashning hojati yo'q.
+const UserDashboard = lazy(() =>
+  import('@/pages/UserDashboard').then((m) => ({ default: m.UserDashboard }))
+);
+const GetQueuePage = lazy(() =>
+  import('@/pages/GetQueuePage').then((m) => ({ default: m.GetQueuePage }))
+);
+const QueueDetailPage = lazy(() =>
+  import('@/pages/QueueDetailPage').then((m) => ({ default: m.QueueDetailPage }))
+);
+const QueueHistoryPage = lazy(() =>
+  import('@/pages/QueueHistoryPage').then((m) => ({ default: m.QueueHistoryPage }))
+);
+const AdminDashboard = lazy(() =>
+  import('@/pages/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
+);
+const AdminServicesPage = lazy(() =>
+  import('@/pages/AdminServicesPage').then((m) => ({ default: m.AdminServicesPage }))
+);
+const AdminStatsPage = lazy(() =>
+  import('@/pages/AdminStatsPage').then((m) => ({ default: m.AdminStatsPage }))
+);
+const AdminOrganizationsPage = lazy(() =>
+  import('@/pages/AdminOrganizationsPage').then((m) => ({ default: m.AdminOrganizationsPage }))
+);
+const AdminStaffPage = lazy(() =>
+  import('@/pages/AdminStaffPage').then((m) => ({ default: m.AdminStaffPage }))
+);
+const DisplayPage = lazy(() =>
+  import('@/pages/LiveQueuePage').then((m) => ({ default: m.DisplayPage }))
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,126 +47,154 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoute({
-  children,
-  roles,
-}: {
-  children: JSX.Element;
-  roles: ('customer' | 'admin')[];
-}) {
+/** Xodim uchun boshlang'ich sahifa admin panel, mijoz uchun dashboard. */
+function homeFor(isStaff: boolean): string {
+  return isStaff ? '/admin' : '/dashboard';
+}
+
+function RequireAuth({ children }: { children: JSX.Element }) {
   const { profile, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!profile) return <Navigate to="/login" replace />;
-  if (!roles.includes(profile.role)) {
-    return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
+  return children;
+}
+
+function RequireStaff({
+  children,
+  superAdminOnly = false,
+}: {
+  children: JSX.Element;
+  superAdminOnly?: boolean;
+}) {
+  const { profile, loading, isStaff, isSuperAdmin } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!profile) return <Navigate to="/login" replace />;
+  if (superAdminOnly ? !isSuperAdmin : !isStaff) {
+    return <Navigate to={homeFor(isStaff)} replace />;
   }
   return children;
 }
 
 function PublicOnlyRoute({ children }: { children: JSX.Element }) {
-  const { profile, loading } = useAuth();
+  const { profile, loading, isStaff } = useAuth();
   if (loading) return <LoadingScreen />;
-  if (profile) {
-    return <Navigate to={profile.role === 'admin' ? '/admin' : '/dashboard'} replace />;
-  }
+  if (profile) return <Navigate to={homeFor(isStaff)} replace />;
   return children;
 }
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route
-        path="/login"
-        element={
-          <PublicOnlyRoute>
-            <LoginPage />
-          </PublicOnlyRoute>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <PublicOnlyRoute>
-            <RegisterPage />
-          </PublicOnlyRoute>
-        }
-      />
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicOnlyRoute>
+              <RegisterPage />
+            </PublicOnlyRoute>
+          }
+        />
 
-      {/* Public display (no login) */}
-      <Route path="/display" element={<DisplayPage />} />
-      <Route path="/display/:slug" element={<DisplayPage />} />
+        {/* Ochiq display — login talab qilinmaydi */}
+        <Route path="/display" element={<DisplayPage />} />
+        <Route path="/display/:slug" element={<DisplayPage />} />
 
-      {/* Customer routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute roles={['customer']}>
-            <UserDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/get-queue"
-        element={
-          <ProtectedRoute roles={['customer']}>
-            <GetQueuePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/join/:slug"
-        element={
-          <ProtectedRoute roles={['customer']}>
-            <GetQueuePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/my-queue"
-        element={
-          <ProtectedRoute roles={['customer']}>
-            <QueueDetailPage />
-          </ProtectedRoute>
-        }
-      />
+        {/* Mijoz sahifalari (xodimlar ham foydalana oladi) */}
+        <Route
+          path="/dashboard"
+          element={
+            <RequireAuth>
+              <UserDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/get-queue"
+          element={
+            <RequireAuth>
+              <GetQueuePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/join/:slug"
+          element={
+            <RequireAuth>
+              <GetQueuePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/my-queue"
+          element={
+            <RequireAuth>
+              <QueueDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireAuth>
+              <QueueHistoryPage />
+            </RequireAuth>
+          }
+        />
 
-      {/* Admin routes */}
-      <Route
-        path="/admin"
-        element={
-          <ProtectedRoute roles={['admin']}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/services"
-        element={
-          <ProtectedRoute roles={['admin']}>
-            <AdminServicesPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/organizations"
-        element={
-          <ProtectedRoute roles={['admin']}>
-            <AdminOrganizationsPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/stats"
-        element={
-          <ProtectedRoute roles={['admin']}>
-            <AdminStatsPage />
-          </ProtectedRoute>
-        }
-      />
+        {/* Xodim / admin sahifalari */}
+        <Route
+          path="/admin"
+          element={
+            <RequireStaff>
+              <AdminDashboard />
+            </RequireStaff>
+          }
+        />
+        <Route
+          path="/admin/services"
+          element={
+            <RequireStaff>
+              <AdminServicesPage />
+            </RequireStaff>
+          }
+        />
+        <Route
+          path="/admin/organizations"
+          element={
+            <RequireStaff>
+              <AdminOrganizationsPage />
+            </RequireStaff>
+          }
+        />
+        <Route
+          path="/admin/stats"
+          element={
+            <RequireStaff>
+              <AdminStatsPage />
+            </RequireStaff>
+          }
+        />
+        <Route
+          path="/admin/staff"
+          element={
+            <RequireStaff superAdminOnly>
+              <AdminStaffPage />
+            </RequireStaff>
+          }
+        />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

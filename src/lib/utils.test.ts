@@ -1,81 +1,106 @@
 import { describe, expect, it } from 'vitest';
-import { calculateWaitTime, formatMinutes, getPeopleAhead, timeAgo } from '@/lib/utils';
-import type { NavbatQueue, NavbatQueueSettings } from '@/lib/supabase';
+import {
+  formatMinutes,
+  formatDate,
+  formatTime,
+  generateSlug,
+  timeAgo,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  STATUS_DOT_COLORS,
+} from '@/lib/utils';
+import type { QueueStatus } from '@/lib/supabase';
 
 describe('formatMinutes', () => {
-  it('formats sub-minute durations', () => {
+  it('nol va manfiy qiymatlarni "0 daqiqa" deb ko\'rsatadi', () => {
+    expect(formatMinutes(0)).toBe('0 daqiqa');
+    expect(formatMinutes(-5)).toBe('0 daqiqa');
+  });
+
+  it('bir daqiqadan kam vaqtni belgilaydi', () => {
     expect(formatMinutes(0.4)).toBe('<1 daqiqa');
   });
 
-  it('formats minutes under an hour', () => {
+  it('bir soatdan kam vaqtni daqiqada beradi', () => {
     expect(formatMinutes(45)).toBe('45 daqiqa');
+    expect(formatMinutes(45.6)).toBe('46 daqiqa');
   });
 
-  it('formats whole hours', () => {
+  it('butun soatlarni beradi', () => {
     expect(formatMinutes(120)).toBe('2 soat');
   });
 
-  it('formats hours with remaining minutes', () => {
+  it('soat va qolgan daqiqalarni beradi', () => {
     expect(formatMinutes(125)).toBe('2 soat 5 daqiqa');
   });
-});
 
-describe('calculateWaitTime', () => {
-  it('returns 0 when nobody is ahead', () => {
-    expect(calculateWaitTime(0, 10)).toBe(0);
-  });
-
-  it('multiplies people ahead by the average service time', () => {
-    expect(calculateWaitTime(3, 5)).toBe(15);
-  });
-});
-
-describe('getPeopleAhead', () => {
-  const settings: NavbatQueueSettings = {
-    id: 's1',
-    service_id: null,
-    organization_id: 'org1',
-    current_number: 10,
-    prefix: 'A',
-    is_open: true,
-    updated_at: new Date().toISOString(),
-  };
-
-  function makeQueue(overrides: Partial<NavbatQueue>): NavbatQueue {
-    return {
-      id: 'q1',
-      queue_number: 'A-015',
-      service_id: null,
-      organization_id: 'org1',
-      user_id: 'u1',
-      status: 'waiting',
-      estimated_wait_time: 0,
-      created_at: new Date().toISOString(),
-      called_at: null,
-      completed_at: null,
-      ...overrides,
-    };
-  }
-
-  it('counts people ahead for a waiting ticket', () => {
-    expect(getPeopleAhead(makeQueue({ queue_number: 'A-015' }), settings)).toBe(5);
-  });
-
-  it('never returns a negative count', () => {
-    expect(getPeopleAhead(makeQueue({ queue_number: 'A-005' }), settings)).toBe(0);
-  });
-
-  it('returns 0 once the ticket is no longer waiting', () => {
-    expect(getPeopleAhead(makeQueue({ queue_number: 'A-020', status: 'serving' }), settings)).toBe(0);
+  it('noto\'g\'ri qiymatlarda ham yiqilmaydi', () => {
+    expect(formatMinutes(Number.NaN)).toBe('0 daqiqa');
+    expect(formatMinutes(Number.POSITIVE_INFINITY)).toBe('0 daqiqa');
   });
 });
 
 describe('timeAgo', () => {
-  it('reports "hozir" for the current moment', () => {
+  it('hozirgi vaqt uchun "hozir" qaytaradi', () => {
     expect(timeAgo(new Date().toISOString())).toBe('hozir');
   });
 
-  it('reports minutes for recent timestamps', () => {
+  it('daqiqalarni hisoblaydi', () => {
     expect(timeAgo(new Date(Date.now() - 5 * 60000).toISOString())).toBe('5 daqiqa oldin');
+  });
+
+  it('soatlarni hisoblaydi', () => {
+    expect(timeAgo(new Date(Date.now() - 3 * 3600_000).toISOString())).toBe('3 soat oldin');
+  });
+
+  it('kunlarni hisoblaydi', () => {
+    expect(timeAgo(new Date(Date.now() - 2 * 86400_000).toISOString())).toBe('2 kun oldin');
+  });
+});
+
+describe('generateSlug', () => {
+  it('bo\'shliqlarni defisga aylantiradi', () => {
+    expect(generateSlug('12-son Poliklinika')).toBe('12-son-poliklinika');
+  });
+
+  it('apostrof va maxsus belgilarni olib tashlaydi', () => {
+    expect(generateSlug("Ipak Yo'li Bank")).toBe('ipak-yoli-bank');
+  });
+
+  it('chetdagi va takroriy defislarni tozalaydi', () => {
+    expect(generateSlug('  --Xalq   Banki--  ')).toBe('xalq-banki');
+  });
+
+  it('lotin bo\'lmagan belgilarni tashlab yuboradi', () => {
+    expect(generateSlug('Bank №1')).toBe('bank-1');
+  });
+});
+
+describe('sana formatlari', () => {
+  const iso = '2026-03-15T09:05:00.000Z';
+
+  it('formatDate sanani qaytaradi', () => {
+    expect(formatDate(iso)).toMatch(/\d{2}/);
+  });
+
+  it('formatTime soat:daqiqa qaytaradi', () => {
+    expect(formatTime(iso)).toMatch(/\d{1,2}[:.]\d{2}/);
+  });
+});
+
+describe('holat jadvallari', () => {
+  const statuses: QueueStatus[] = ['waiting', 'serving', 'completed', 'skipped', 'cancelled'];
+
+  it('har bir holat uchun o\'zbekcha nom bor', () => {
+    for (const status of statuses) {
+      expect(STATUS_LABELS[status]).toBeTruthy();
+    }
+  });
+
+  it('har bir holat uchun rang sinflari bor', () => {
+    for (const status of statuses) {
+      expect(STATUS_COLORS[status]).toBeTruthy();
+      expect(STATUS_DOT_COLORS[status]).toBeTruthy();
+    }
   });
 });

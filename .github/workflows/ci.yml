@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Bir branch uchun bir vaqtda faqat bitta ishga tushirish
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Bog'liqliklarni o'rnatish
+        run: npm ci
+
+      - name: TypeScript tekshiruvi
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Testlar
+        run: npm test
+
+      - name: Production build
+        env:
+          # Build uchun haqiqiy kalitlar shart emas — ilova ularsiz ham
+          # kompilyatsiya bo'ladi (demo rejimga tushadi).
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-key
+        run: npm run build
+
+      - name: Build natijasini saqlash
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
