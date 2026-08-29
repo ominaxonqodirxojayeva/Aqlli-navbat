@@ -39,6 +39,12 @@ Editor'da ishga tushiring (yoki `supabase db push`). Hammasi idempotent —
 qayta ishga tushirish xavfsiz. So'ng `supabase/tests/rls_check.sql` ni
 ishga tushiring: har bir qator `OK` bo'lishi kerak.
 
+> **Mavjud loyihaga qo'llayotgan bo'lsangiz.** Eski seed migratsiyasi bazaga
+> paroli kodda ochiq yozilgan uchta demo hisob yaratgan bo'lishi mumkin
+> (`admin@timeflow.uz` — superadmin huquqi bilan).
+> `20260829120000_remove_demo_accounts.sql` ularni o'chiradi; tekshirish
+> uchun `rls_check.sql` dagi 11-tekshiruvga qarang.
+
 Batafsil: [docs/database.md](docs/database.md).
 
 ---

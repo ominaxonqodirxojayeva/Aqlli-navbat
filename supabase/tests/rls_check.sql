@@ -103,6 +103,19 @@ WITH checks AS (
   SELECT 'navbat_queues realtime''da',
          EXISTS (SELECT 1 FROM pg_publication_tables
                  WHERE pubname = 'supabase_realtime' AND tablename = 'navbat_queues')
+
+  UNION ALL
+  -- 11. Seed yaratgan demo hisoblar o'chirilgan (paroli kodda ochiq edi)
+  SELECT 'demo hisoblar (admin@timeflow.uz va h.k.) bazada yo''q',
+         NOT EXISTS (
+           SELECT 1 FROM auth.users
+           WHERE email IN ('admin@timeflow.uz', 'staff@timeflow.uz', 'user@timeflow.uz')
+         )
+
+  UNION ALL
+  -- 12. Rol qiymatlari normallashtirilgan ('ADMIN' kabi qoldiq yo'q)
+  SELECT 'profiles.role faqat customer/admin',
+         NOT EXISTS (SELECT 1 FROM profiles WHERE role NOT IN ('customer', 'admin'))
 )
 
 SELECT
