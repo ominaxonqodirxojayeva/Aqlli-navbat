@@ -30,7 +30,9 @@ if (typeof window !== 'undefined') {
     } as unknown as typeof window.ResizeObserver;
   }
 
-  if (!('scrollTo' in window)) {
+  // `'scrollTo' in window` ishlatib bo'lmaydi: TS uni Window'ning majburiy
+  // a'zosi deb biladi va salbiy shoxda `window` ni `never` ga toraytiradi.
+  if (typeof window.scrollTo !== 'function') {
     window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
   }
 }
