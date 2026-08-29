@@ -101,6 +101,11 @@ ishlaydigan yangi kod yozganda bu holatni ham hisobga oling — aks holda ilova
   rekursiya beradi.
 - Xavfsizlikka tegadigan o'zgarishdan keyin `supabase/tests/rls_check.sql`
   ga tekshiruv qo'shing.
+- **Migratsiyaga hech qachon login/parol yozmang.** Namunaviy ma'lumot (seed)
+  faqat tashkilot, xizmat va shunga o'xshash ma'lumotdan iborat bo'lsin;
+  foydalanuvchi hisobini Supabase panelidan qo'lda yarating. Loyihada bunga
+  misol bor: eski seed `admin@timeflow.uz / Password123!` superadmin hisobini
+  yaratgan edi — `20260829120000_remove_demo_accounts.sql` uni tozalaydi.
 
 ## Testlar
 

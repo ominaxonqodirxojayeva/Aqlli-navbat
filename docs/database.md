@@ -22,10 +22,30 @@ supabase db push          # yoki har bir faylni SQL Editor'da "Run"
 | `20260822100000_fix_profiles_rls_recursion.sql` | `profiles` RLS rekursiyasini tuzatish |
 | **`20260828120000_v2_platform_upgrade.sql`** | **v2:** ko'p tashkilotlilik, kritik RLS tuzatish, `notifications` |
 | **`20260828120100_v2_rpc_functions.sql`** | **v2:** barcha RPC funksiyalari |
+| **`20260829120000_remove_demo_accounts.sql`** | Seed yaratgan demo hisoblarni o'chiradi, rollarni normallashtiradi |
 
 Qo'llagandan keyin **albatta** `supabase/tests/rls_check.sql` ni ishga
 tushiring — har bir qator `OK` bo'lishi kerak. `XATO` chiqsa oxirgi ikki
 migratsiya to'liq qo'llanmagan.
+
+> **Ogohlantirish — seed va demo hisoblar.**
+> `20260817095000_seed_demo_data.sql` bazaga namunaviy tashkilot/xizmatlar
+> bilan birga **uchta foydalanuvchi hisobi** ham yaratadi va ularning paroli
+> fayl ichida ochiq matnda yozilgan (`Password123!`). Ulardan biri —
+> `admin@timeflow.uz` — `role = 'ADMIN'` oladi, `is_admin()` esa
+> `lower(role) = 'admin'` ni tekshirgani uchun bu **to'liq huquqli
+> superadmin** bo'lib chiqadi.
+>
+> Faylning sarlavhasidagi `[SUPERSEDED] ... not used by the current app`
+> izohi faqat eskirgan *sxemaga* tegishli — `INSERT INTO auth.users` bloki
+> baribir bajariladi.
+>
+> `20260829120000_remove_demo_accounts.sql` shu hisoblarni o'chiradi va
+> `profiles.role` cheklovini `customer`/`admin` bilan chegaralaydi. Migratsiyani
+> qo'llagach `supabase/tests/rls_check.sql` dagi 11- va 12-tekshiruv buni
+> tasdiqlaydi.
+>
+> Yangi seed yozsangiz — **hech qachon** unga login/parol qo'ymang.
 
 > Eski migratsiyalardagi `profiles.role` cheklovi (`USER`/`STAFF`/`ADMIN`) va
 > `organizations.type` (`BANK`/`HOSPITAL`) v2 da normallashtirilgan:
@@ -45,7 +65,7 @@ Foydalanuvchi profili, `auth.users(id)` ga bog'langan.
 | `full_name` | text | |
 | `phone` | text | |
 | `email` | text | |
-| `role` | text | `customer` / `admin` (`admin` = superadmin) |
+| `role` | text | `customer` / `admin` (`admin` = superadmin); CHECK bilan cheklangan |
 | `created_at` | timestamptz | |
 
 **RLS:** o'z qatorini SELECT/UPDATE qila oladi, superadmin — hammasini.
